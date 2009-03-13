@@ -46,11 +46,28 @@ class RemoteCyberSourceTest < Test::Unit::TestCase
     assert !response.authorization.blank?
   end
 
+  def test_successful_authorization_without_phone
+    @options[:billing_address][:phone] = nil
+    assert response = @gateway.authorize(@amount, @credit_card, @options)
+    assert_equal 'Successful transaction', response.message
+    assert_success response
+    assert response.test?
+    assert !response.authorization.blank?    
+  end
+
   def test_unsuccessful_authorization
     assert response = @gateway.authorize(@amount, @declined_card, @options)
     assert response.test?
     assert_equal 'Invalid account number', response.message
     assert_equal false,  response.success?
+  end
+
+  def test_unsuccessful_authorization_with_amount_between_1000_and_4000
+    @amount = 100500
+    assert response = @gateway.authorize(@amount, @credit_card, @options)
+    assert response.test?
+    assert_equal 'General decline of the card', response.message
+    assert_equal false, response.success?
   end
 
   def test_successful_tax_calculation

@@ -13,6 +13,7 @@ module ActiveMerchant #:nodoc:
     # * Nexus is the list of states or provinces where you have a physical presence.  Nexus is used to calculate tax.  Leave blank to tax everyone.  
     # * If you want to calculate VAT for overseas customers you must supply a registration number in the options hash as vat_reg_number. 
     # * productCode is a value in the line_items hash that is used to tell CyberSource what kind of item you are selling.  It is used when calculating tax/VAT.
+    # * If your test order uses an amount from $1,000-$4,000, you may receive an error message that is a response configured specifically for the test system. This error does not occur when your customers place real orders. (from http://apps.cybersource.com/library/documentation/sbc/HOP_UG/Hosted_Order_Page_UG.pdf)
     # * All transactions use dollar values.
     class CyberSourceGateway < Gateway
       TEST_URL = 'https://ics2wstest.ic3.com/commerce/1.x/transactionProcessor'
@@ -276,6 +277,7 @@ module ActiveMerchant #:nodoc:
           xml.tag! 'state', address[:state]
           xml.tag! 'postalCode', address[:zip]
           xml.tag! 'country', address[:country]
+          xml.tag! 'phoneNumber', address[:phone] if address[:phone]
           xml.tag! 'email', options[:email]
         end 
       end
