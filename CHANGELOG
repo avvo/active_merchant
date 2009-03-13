@@ -1,5 +1,7 @@
 = ActiveMerchant CHANGELOG
 
+* Update CyberSource gateway to support billing phone number [Justin Weiss]
+* Added a note to the CyberSource gateway documentation about test payments between $1000-$4000 being rejected [Justin Weiss]
 * Change Payflow header X-VPS-Timeout -> X-VPS-Client-Timeout [cody]
 * Fix typo preventing OgoneGateway from working in production [Nicolas Jacobeus]
 * Add support for the Elavon MyVirtualMerchant gateway [jstorimer]
