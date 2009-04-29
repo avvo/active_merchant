@@ -120,9 +120,14 @@ module ActiveMerchant #:nodoc:
       # Purchase is an auth followed by a capture
       # You must supply an order_id in the options hash  
       def purchase(money, creditcard, options = {})
-        requires!(options, :order_id, :email)
-        setup_address_hash(options)
-        commit(build_purchase_request(money, creditcard, options), options)
+        if ActiveMerchant::Billing::CreditCard === creditcard
+          requires!(options, :order_id, :email)
+          setup_address_hash(options)
+          commit(build_purchase_request(money, creditcard, options), options)
+        elsif String === creditcard
+          requires!(options, :order_id)
+          commit(build_purchase_with_stored_card_request(money, creditcard, options), options)
+        end
       end
       
       def void(identification, options = {})
@@ -132,7 +137,30 @@ module ActiveMerchant #:nodoc:
       def credit(money, identification, options = {})
         commit(build_credit_request(money, identification, options), options)
       end
-      
+
+      # Stores billing information as a new customer profile with
+      # CyberSource. The billing address should be stored in the
+      # options hash. Use +options[:verify]+ to force
+      # pre-authorization. The subscription id is returned in
+      # +response.params['subscriptionID']+.
+      def store(creditcard, options = {})
+        setup_address_hash(options)
+        commit(build_store_request(creditcard, options), options)
+      end
+
+      # Removes subscription information for a customer profile from
+      # CyberSource. +identification+ should be the subscription id
+      # returned from the +store+ call.
+      def unstore(identification, options = {})
+        commit(build_unstore_request(identification, options), options)
+      end
+
+      # Updates subscription information for a customer profile held
+      # by CyberSource. +identification+ should be the subscription id
+      # returned from the +store+ call.
+      def update(identification, creditcard, options = {})
+        commit(build_update_request(identification, creditcard, options), options)
+      end
 
       # CyberSource requires that you provide line item information for tax calculations
       # If you do not have prices for each item or want to simplify the situation then pass in one fake line item that costs the subtotal of the order
@@ -212,6 +240,15 @@ module ActiveMerchant #:nodoc:
         add_business_rules_data(xml)
         xml.target!
       end
+
+      def build_purchase_with_stored_card_request(money, subscription_id, options)
+        xml = Builder::XmlMarkup.new :indent => 2
+        add_purchase_data(xml, money, true, options)
+        add_recurring_subscription_info(xml, subscription_id)
+        add_purchase_service(xml, options)
+        add_business_rules_data(xml)
+        xml.target!
+      end
       
       def build_void_request(identification, options)
         order_id, request_id, request_token = identification.split(";")
@@ -230,6 +267,37 @@ module ActiveMerchant #:nodoc:
         add_purchase_data(xml, money, true, options)
         add_credit_service(xml, request_id, request_token)
         
+        xml.target!
+      end
+
+      def build_store_request(creditcard, options = {})
+        xml = Builder::XmlMarkup.new :indent => 2
+        
+        add_address(xml, creditcard, options[:billing_address], options)
+        add_purchase_data(xml, 0)
+        add_creditcard(xml, creditcard)
+        add_recurring_subscription_info(xml, nil, :frequency => 'on-demand')
+        add_subscription_create_service(xml, options[:verify])
+        add_business_rules_data(xml)
+        xml.target!
+      end
+
+      def build_unstore_request(subscription_id, options = {})
+        xml = Builder::XmlMarkup.new :indent => 2
+        add_recurring_subscription_info(xml, subscription_id, :cancel => true)
+        add_subscription_update_service(xml)
+        xml.target!
+      end
+
+      def build_update_request(subscription_id, creditcard, options = {})
+        xml = Builder::XmlMarkup.new :indent => 2
+        
+        add_address(xml, creditcard, options[:billing_address], options)
+#        add_purchase_data(xml, 0)
+        add_creditcard(xml, creditcard)
+        add_recurring_subscription_info(xml, subscription_id)
+        add_subscription_update_service(xml)
+        add_business_rules_data(xml)
         xml.target!
       end
 
@@ -292,6 +360,31 @@ module ActiveMerchant #:nodoc:
         end
       end
 
+      def add_subscription_create_service(xml, verify = nil)
+        xml.tag! 'paySubscriptionCreateService', {'run' => 'true'} do
+          # Only insert this element if verify is true or false, since
+          # in most cases we just want the default
+          xml.tag 'disableAutoAuth', verify ? 'N' : 'Y' unless verify.nil?
+        end
+      end
+
+      def add_subscription_update_service(xml)
+        xml.tag! 'paySubscriptionUpdateService', {'run' => 'true'}
+      end
+
+      # subscription_id should be nil if a new subscription is being
+      # created. Frequency is set by options[:frequency] and can be
+      # one of %w(on-demand weekly bi-weekly semi-monthly monthly
+      # quarterly quad-weekly semi-annually annually). Set
+      # options[:cancel] to cancel a subscription.
+      def add_recurring_subscription_info(xml, subscription_id, options = {})
+        xml.tag! 'recurringSubscriptionInfo' do
+          xml.tag! 'subscriptionID', subscription_id if subscription_id
+          xml.tag! 'frequency', options[:frequency] if options[:frequency]
+          xml.tag! 'status', 'cancel' if options[:cancel]
+        end
+      end
+      
       def add_tax_service(xml)
         xml.tag! 'taxService', {'run' => 'true'} do
           xml.tag!('nexus', @options[:nexus]) unless @options[:nexus].blank?

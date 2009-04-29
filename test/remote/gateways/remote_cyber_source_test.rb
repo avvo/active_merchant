@@ -158,4 +158,50 @@ class RemoteCyberSourceTest < Test::Unit::TestCase
     assert_success response
     assert response.test?       
   end
+
+  def test_store
+    assert response = @gateway.store(@credit_card, @options)
+    assert_equal 'Successful transaction', response.message
+    assert_success response
+  end
+
+  def test_store_invalid_card
+    assert response = @gateway.store(@declined_card, @options)
+    assert_equal 'Invalid account number', response.message
+    assert_equal false,  response.success?
+  end
+  
+  def test_unstore
+    assert response = @gateway.store(@credit_card, @options)
+    assert_equal 'Successful transaction', response.message
+    assert_success response
+    
+    subscription_id = response.params['subscriptionID']
+    assert response = @gateway.unstore(subscription_id, @options)
+    assert_equal 'Successful transaction', response.message
+    assert_success response
+  end
+
+  def test_purchase_with_stored_card
+    assert response = @gateway.store(@credit_card, @options)
+    assert_equal 'Successful transaction', response.message
+    assert_success response
+
+    assert response = @gateway.purchase(@amount, response.params['subscriptionID'], @options)
+    assert_equal 'Successful transaction', response.message
+    assert_success response
+    assert response.test?
+  end
+  
+  def test_update_stored_data
+    assert response = @gateway.store(@credit_card, @options)
+    assert_equal 'Successful transaction', response.message
+    assert_success response
+
+    @options[:billing_address][:address1] = "123 Fake St"
+    assert response = @gateway.update(response.params['subscriptionID'], @credit_card, @options)
+    assert_equal 'Successful transaction', response.message
+    assert_success response
+    
+  end
 end
