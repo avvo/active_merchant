@@ -10,6 +10,7 @@ class RemoteCyberSourceTest < Test::Unit::TestCase
     @declined_card = credit_card('801111111111111', :type => 'visa')
     
     @amount = 100
+    @invalid_amount = 100500
     
     @options = {
       :billing_address => address,
@@ -63,8 +64,7 @@ class RemoteCyberSourceTest < Test::Unit::TestCase
   end
 
   def test_unsuccessful_authorization_with_amount_between_1000_and_4000
-    @amount = 100500
-    assert response = @gateway.authorize(@amount, @credit_card, @options)
+    assert response = @gateway.authorize(@invalid_amount, @credit_card, @options)
     assert response.test?
     assert_equal 'General decline of the card', response.message
     assert_equal false, response.success?
@@ -176,7 +176,7 @@ class RemoteCyberSourceTest < Test::Unit::TestCase
     assert_equal 'Successful transaction', response.message
     assert_success response
     
-    subscription_id = response.params['subscriptionID']
+    subscription_id = response.authorization
     assert response = @gateway.unstore(subscription_id, @options)
     assert_equal 'Successful transaction', response.message
     assert_success response
@@ -187,7 +187,7 @@ class RemoteCyberSourceTest < Test::Unit::TestCase
     assert_equal 'Successful transaction', response.message
     assert_success response
 
-    assert response = @gateway.purchase(@amount, response.params['subscriptionID'], @options)
+    assert response = @gateway.purchase(@amount, response.authorization, @options)
     assert_equal 'Successful transaction', response.message
     assert_success response
     assert response.test?
@@ -199,9 +199,64 @@ class RemoteCyberSourceTest < Test::Unit::TestCase
     assert_success response
 
     @options[:billing_address][:address1] = "123 Fake St"
-    assert response = @gateway.update(response.params['subscriptionID'], @credit_card, @options)
+    assert response = @gateway.update(response.authorization, @credit_card, @options)
     assert_equal 'Successful transaction', response.message
     assert_success response
     
   end
+
+  def test_authorize_with_stored_card
+    assert response = @gateway.store(@credit_card, @options)
+    assert_equal 'Successful transaction', response.message
+    assert_success response
+
+    assert response = @gateway.authorize(@amount, response.authorization, @options)
+    assert_equal 'Successful transaction', response.message
+    assert_success response
+    assert response.test?
+  end
+
+  def test_authorize_with_invalid_amount_fails
+    assert response = @gateway.store(@credit_card, @options)
+    assert_equal 'Successful transaction', response.message
+    assert_success response
+
+    assert response = @gateway.authorize(@invalid_amount, response.authorization, @options)
+    assert_equal 'General decline of the card', response.message
+    assert_equal false,  response.success?
+
+  end
+
+  def test_capture_with_stored_card
+    assert response = @gateway.store(@credit_card, @options)
+    assert_equal 'Successful transaction', response.message
+    assert_success response
+
+    assert response = @gateway.authorize(@amount, response.authorization, @options)
+    assert_equal 'Successful transaction', response.message
+    assert_success response
+    assert response.test?
+    
+    assert response = @gateway.capture(@amount, response.authorization, @options)
+    assert_equal 'Successful transaction', response.message
+    assert_success response
+    assert response.test?
+  end
+
+  def test_credit_with_stored_card
+    assert response = @gateway.store(@credit_card, @options)
+    assert_equal 'Successful transaction', response.message
+    assert_success response
+
+    assert response = @gateway.purchase(@amount, response.authorization, @options)
+    assert_equal 'Successful transaction', response.message
+    assert_success response
+    assert response.test?
+
+    assert response = @gateway.credit(@amount, response.authorization)
+    assert_equal 'Successful transaction', response.message
+    assert_success response
+    assert response.test?
+  end
+
 end

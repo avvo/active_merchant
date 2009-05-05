@@ -106,9 +106,14 @@ module ActiveMerchant #:nodoc:
       #
       # You must supply an :order_id in the options hash 
       def authorize(money, creditcard, options = {})
-        requires!(options,  :order_id, :email)
-        setup_address_hash(options)
-        commit(build_auth_request(money, creditcard, options), options )
+        if String === creditcard
+          requires!(options, :order_id)
+          commit(build_auth_with_stored_card_request(money, creditcard, options), options)
+        else
+          requires!(options, :order_id, :email)
+          setup_address_hash(options)
+          commit(build_auth_request(money, creditcard, options), options)
+        end
       end
 
       # Capture an authorization that has previously been requested
@@ -120,13 +125,13 @@ module ActiveMerchant #:nodoc:
       # Purchase is an auth followed by a capture
       # You must supply an order_id in the options hash  
       def purchase(money, creditcard, options = {})
-        if ActiveMerchant::Billing::CreditCard === creditcard
+        if String === creditcard
+          requires!(options, :order_id)
+          commit(build_purchase_with_stored_card_request(money, creditcard, options), options)
+        else
           requires!(options, :order_id, :email)
           setup_address_hash(options)
           commit(build_purchase_request(money, creditcard, options), options)
-        elsif String === creditcard
-          requires!(options, :order_id)
-          commit(build_purchase_with_stored_card_request(money, creditcard, options), options)
         end
       end
       
@@ -142,7 +147,7 @@ module ActiveMerchant #:nodoc:
       # CyberSource. The billing address should be stored in the
       # options hash. Use +options[:verify]+ to force
       # pre-authorization. The subscription id is returned in
-      # +response.params['subscriptionID']+.
+      # +response.authorization+.
       def store(creditcard, options = {})
         setup_address_hash(options)
         commit(build_store_request(creditcard, options), options)
@@ -192,7 +197,7 @@ module ActiveMerchant #:nodoc:
         commit(build_tax_calculation_request(creditcard, options), options)	  
       end
       
-      private                       
+      private
       # Create all address hash key value pairs so that we still function if we were only provided with one or two of them 
       def setup_address_hash(options)
         options[:billing_address] = options[:billing_address] || options[:address] || {}
@@ -204,6 +209,15 @@ module ActiveMerchant #:nodoc:
         add_address(xml, creditcard, options[:billing_address], options)
         add_purchase_data(xml, money, true, options)
         add_creditcard(xml, creditcard)
+        add_auth_service(xml)
+        add_business_rules_data(xml)
+        xml.target!
+      end
+
+      def build_auth_with_stored_card_request(money, subscription_id, options)
+        xml = Builder::XmlMarkup.new :indent => 2
+        add_purchase_data(xml, money, true, options)
+        add_recurring_subscription_info(xml, subscription_id)
         add_auth_service(xml)
         add_business_rules_data(xml)
         xml.target!
@@ -293,7 +307,6 @@ module ActiveMerchant #:nodoc:
         xml = Builder::XmlMarkup.new :indent => 2
         
         add_address(xml, creditcard, options[:billing_address], options)
-#        add_purchase_data(xml, 0)
         add_creditcard(xml, creditcard)
         add_recurring_subscription_info(xml, subscription_id)
         add_subscription_update_service(xml)
@@ -364,7 +377,7 @@ module ActiveMerchant #:nodoc:
         xml.tag! 'paySubscriptionCreateService', {'run' => 'true'} do
           # Only insert this element if verify is true or false, since
           # in most cases we just want the default
-          xml.tag 'disableAutoAuth', verify ? 'N' : 'Y' unless verify.nil?
+          xml.tag! 'disableAutoAuth', verify ? 'N' : 'Y' unless verify.nil?
         end
       end
 
@@ -451,9 +464,13 @@ module ActiveMerchant #:nodoc:
 	      response = parse(ssl_post(test? ? TEST_URL : LIVE_URL, build_request(request, options)))
         
 	      success = response[:decision] == "ACCEPT"
-	      message = @@response_codes[('r' + response[:reasonCode]).to_sym] rescue response[:message] 
-        authorization = success ? [ options[:order_id], response[:requestID], response[:requestToken] ].compact.join(";") : nil
-        
+	      message = @@response_codes[('r' + response[:reasonCode]).to_sym] rescue response[:message]
+        authorization = if success && response[:subscriptionID]
+                          authorization = response[:subscriptionID]
+                        elsif success
+                          authorization = [ options[:order_id], response[:requestID], response[:requestToken] ].compact.join(";")
+                        end
+
         Response.new(success, message, response, 
           :test => test?, 
           :authorization => authorization,
