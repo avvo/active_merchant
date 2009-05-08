@@ -198,11 +198,16 @@ class RemoteCyberSourceTest < Test::Unit::TestCase
     assert_equal 'Successful transaction', response.message
     assert_success response
 
+    subscription_id = response.authorization
+    
     @options[:billing_address][:address1] = "123 Fake St"
-    assert response = @gateway.update(response.authorization, @credit_card, @options)
+    assert response = @gateway.update(subscription_id, @credit_card, @options)
     assert_equal 'Successful transaction', response.message
     assert_success response
-    
+
+    assert response = @gateway.update(subscription_id, credit_card('', :type => 'visa'), @options)
+    assert_equal 'Successful transaction', response.message
+    assert_success response
   end
 
   def test_authorize_with_stored_card
