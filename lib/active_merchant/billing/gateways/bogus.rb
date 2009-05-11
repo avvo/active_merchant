@@ -18,7 +18,7 @@ module ActiveMerchant #:nodoc:
       self.display_name = 'Bogus'
       
       def authorize(money, creditcard, options = {})
-        case creditcard.number
+        case creditcard.respond_to?(:number) ? creditcard.number : creditcard
         when '1'
           Response.new(true, SUCCESS_MESSAGE, {:authorized_amount => money.to_s}, :test => true, :authorization => AUTHORIZATION )
         when '2'
