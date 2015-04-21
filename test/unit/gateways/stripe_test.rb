@@ -205,11 +205,19 @@ class StripeTest < Test::Unit::TestCase
     assert_success response
   end
 
-  def test_successful_purchase_with_statement_description
+  def test_successful_purchase_with_statement_descriptor
     stub_comms(@gateway, :ssl_request) do
-      @gateway.purchase(@amount, @credit_card, statement_description: '5K RACE TICKET')
+      @gateway.purchase(@amount, @credit_card, statement_descriptor: '5K RACE TICKET')
     end.check_request do |method, endpoint, data, headers|
-      assert_match(/statement_description=5K\+RACE\+TICKET/, data)
+      assert_match(/statement_descriptor=5K\+RACE\+TICKET/, data)
+    end.respond_with(successful_purchase_response)
+  end
+
+  def test_successful_purchase_with_destination
+    stub_comms(@gateway, :ssl_request) do
+      @gateway.purchase(@amount, @credit_card, destination: 'acct_xxx')
+    end.check_request do |method, endpoint, data, headers|
+      assert_match(/destination=acct_xxx/, data)
     end.respond_with(successful_purchase_response)
   end
 

@@ -235,7 +235,8 @@ module ActiveMerchant #:nodoc:
         add_customer(post, payment, options)
         add_customer_data(post, options)
         post[:description] = options[:description]
-        post[:statement_description] = options[:statement_description]
+        post[:statement_descriptor] = options[:statement_descriptor]
+        post[:destination] = options[:destination]
 
         post[:metadata] = options[:metadata] || {}
         post[:metadata][:email] = options[:email] if options[:email]
