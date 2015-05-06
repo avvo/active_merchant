@@ -213,6 +213,31 @@ class StripeTest < Test::Unit::TestCase
     end.respond_with(successful_purchase_response)
   end
 
+  def test_successful_purchase_with_statement_description
+    stub_comms(@gateway, :ssl_request) do
+      assert_deprecation_warning do
+        @gateway.purchase(@amount, @credit_card, statement_description: '5K RACE TICKET')
+      end
+    end.check_request do |method, endpoint, data, headers|
+      assert_match(/statement_descriptor=5K\+RACE\+TICKET/, data)
+    end.respond_with(successful_purchase_response)
+  end
+
+  def test_successful_purchase_with_statement_description_and_descriptor
+    stub_comms(@gateway, :ssl_request) do
+      assert_deprecation_warning do
+        @gateway.purchase(
+          @amount,
+          @credit_card,
+          statement_description: '5K RACE TICKET DESCRIPTION',
+          statement_descriptor: '5K RACE TICKET DESCRIPTOR'
+        )
+      end
+    end.check_request do |method, endpoint, data, headers|
+      assert_match(/statement_descriptor=5K\+RACE\+TICKET\+DESCRIPTOR/, data)
+    end.respond_with(successful_purchase_response)
+  end
+
   def test_successful_purchase_with_destination
     stub_comms(@gateway, :ssl_request) do
       @gateway.purchase(@amount, @credit_card, destination: 'acct_xxx')

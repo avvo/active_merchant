@@ -235,12 +235,14 @@ module ActiveMerchant #:nodoc:
         add_customer(post, payment, options)
         add_customer_data(post, options)
         post[:description] = options[:description]
-        post[:statement_descriptor] = options[:statement_descriptor]
 
         if options[:statement_description]
           ActiveMerchant.deprecated("Stripe has replaced the statement_description field on the Charge object with the statement_descriptor field")
+
           post[:statement_descriptor] = options[:statement_description]
         end
+
+        post[:statement_descriptor] = options[:statement_descriptor] unless options[:statement_descriptor].nil?
 
         post[:destination] = options[:destination]
 
